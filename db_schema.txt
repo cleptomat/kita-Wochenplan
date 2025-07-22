@@ -1,0 +1,9 @@
+CREATE TABLE events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    date TEXT NOT NULL, -- Format: YYYYMMDD
+    start_time TEXT NOT NULL, -- Format: Minutes since 00:00
+    end_time TEXT NOT NULL,   -- Format: Minutes since 00:00
+    image TEXT,
+    color TEXT
+);
