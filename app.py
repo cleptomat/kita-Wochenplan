@@ -6,6 +6,27 @@ import os
 app = Flask(__name__)
 DB_PATH = 'database.db'
 
+def init_db():
+    """Initialize database with events table if it doesn't exist"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            date TEXT NOT NULL,
+            start_time INTEGER NOT NULL,
+            end_time INTEGER NOT NULL,
+            image TEXT,
+            color TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+# Initialize database on startup
+init_db()
+
 DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 DISPLAY_DAYS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag']
 STANDARD_EVENTS = [
@@ -157,6 +178,7 @@ def index():
         return redirect(url_for('index'))
 
     events_by_day = get_events_by_day()
+    week_dates = get_current_week_dates()
     EN_TO_DE = {
     'Monday': 'Montag',
     'Tuesday': 'Dienstag',
@@ -167,18 +189,34 @@ def index():
     'Sunday': 'Sonntag'
     }
 
-    display_days = [EN_TO_DE[day] for day in DAYS[:5]]
+    # Create display information
+    display_days = []
+    display_dates = []
+    day_keys = []
+    
+    # Create display days with dates for weekdays
+    for i, day in enumerate(DAYS[:5]):
+        display_days.append(f"{EN_TO_DE[day]}\n{week_dates[i].strftime('%d.%m.%Y')}")
+        display_dates.append(week_dates[i].strftime('%d.%m.%Y'))
+        day_keys.append(day)  # Keep original English day name for lookup
 
+    # Add weekend if there are Sunday events
     if events_by_day['Sunday']:
-        display_days.append(EN_TO_DE['Saturday'])
-        display_days.append(EN_TO_DE['Sunday'])
+        display_days.append(f"{EN_TO_DE['Saturday']}\n{week_dates[5].strftime('%d.%m.%Y')}")
+        display_days.append(f"{EN_TO_DE['Sunday']}\n{week_dates[6].strftime('%d.%m.%Y')}")
+        display_dates.extend([week_dates[5].strftime('%d.%m.%Y'), week_dates[6].strftime('%d.%m.%Y')])
+        day_keys.extend(['Saturday', 'Sunday'])
 
-    day_key_map = {v: k for k, v in EN_TO_DE.items()}
+    # Create mapping from display labels back to English day names
+    day_key_map = {}
+    for i, display_day in enumerate(display_days):
+        day_key_map[display_day] = day_keys[i]
     return render_template(
         'index.html',
         events=events_by_day,
         days=DAYS,
         display_days=display_days,
+        display_dates=display_dates,
         day_key_map=day_key_map
     )
 

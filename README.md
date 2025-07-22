@@ -4,12 +4,13 @@ A Flask web application designed to run on a Raspberry Pi in kiosk mode, display
 
 ## Features
 
-- **Weekly Schedule View**: Display events across Monday-Sunday in a time-grid format
+- **Weekly Schedule View**: Display events across Monday-Sunday in a time-grid format with dates
 - **Event Management**: Add, edit, and delete events with color coding
 - **Consistent Layout**: Events maintain visual consistency across overlapping time slots
 - **Touch-Friendly**: Optimized for touchscreen interaction in kiosk mode
 - **Auto-Start**: Automatically launches in fullscreen kiosk mode on boot
 - **Standard Events**: Pre-configured daily events (Frühstück, Morgentreff, Mittagessen)
+- **Offline Time Keeping**: Maintains accurate time even without internet connection
 
 ## Hardware Requirements
 
@@ -73,6 +74,20 @@ The application includes automated kiosk mode setup:
 
 The kiosk mode will automatically start on boot via the desktop autostart entry.
 
+### 4. Time Synchronization Setup (Important for Offline Use)
+
+Before disconnecting from the internet, run the time sync script:
+
+```bash
+# Sync time and set up offline time keeping
+./sync_time.sh
+
+# Optional: Set up additional offline time persistence
+./setup_offline_time.sh
+```
+
+This ensures the Pi maintains accurate time even without internet connection.
+
 ## Usage
 
 ### Normal Operation (Kiosk Mode)
@@ -123,6 +138,8 @@ kita-Wochenplan/
 ├── start_app.sh                        # Flask startup script
 ├── kiosk.sh                            # Basic kiosk mode script
 ├── kiosk_with_display_settings.sh      # Enhanced kiosk script
+├── sync_time.sh                        # Time synchronization script
+├── setup_offline_time.sh               # Offline time setup script
 ├── templates/
 │   └── index.html                      # Main HTML template
 ├── static/
