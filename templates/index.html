@@ -76,12 +76,20 @@
             margin:0;
             height: 100%;
         }
+        .current-time {
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-align: center;
+            margin: 10px 0;
+            color: #333;
+        }
         .time-cell {
             background: #f8f9fa;
-            font-size: 0.8rem;
+            font-size: 1.0rem;
             text-align: right;
             padding-right: 5px;
             padding-top: 20px;
+            width: 60px;
         }
         .day-header {
             text-align: center;
@@ -107,92 +115,111 @@
             position:absolute;
             top:-0.8rem;
         }
+        .current-day {
+            background-color: #e7f3ff !important;
+        }
+        .current-time-slot {
+            background-color: #ffd700 !important; /* Gold color for current time slot */
+            border: 3px solid #ff8c00 !important; /* Thicker, more orange-gold border */
+            box-shadow: 0 0 8px rgba(255, 140, 0, 0.6) !important; /* Add glow effect */
+        }
+        .past-time-slot {
+            background-color: #d0d0d0 !important; /* Darker gray for past time slots */
+        }
+        .past-event {
+            opacity: 0.4 !important;
+            filter: grayscale(60%) !important;
+            background-color: #b0b0b0 !important;
+        }
     </style>
 </head>
 <body class="p-4">
     <div class="main-content">
+    <div class="current-time">{{ current_time }}</div>
     <div class="d-flex justify-content-between align-items-center mb-3">
         <!--<h2>Wochenplan</h2> -->
     </div>
-    <!--remove table-layout:fixed if columns should have different width-->
-<table class="table table-borderless schedule-table" style="table-layout: fixed; width: 100%; height: 100%;">
-    <thead>
-        <tr>
-            <th style="width:50px;"></th>
-            {% for day in display_days %}
-                <th style="text-align:center; width: auto;" class="cell-border day-header">{{ day }}</th>
-            {% endfor %}
-        </tr>
-    </thead>
-    <tbody>
-        {% set processed = {} %}
-        {% for hour in range(8, 18) %}
-            {% for quarter in range(0, 60, 15) %}
-                {% set current_minute = hour * 60 + quarter %}                    <tr style="height:calc((100vh - 120px) / 42);">
-                        {% if quarter == 0 %}
-                    <td class="time-td" ><div class="time-div">{{ "%02d:%02d"|format(hour, quarter) }}</div></td>
-                    {% else %}
-                    <td class="time-td"></td>
-                    {% endif %}
-                    {% for day_label in display_days %}
-    {% set day = day_key_map[day_label] %}
-                        {% set cell_key = day ~ '-' ~ current_minute %}
-
-                        {% set minute_events = find_events(events[day], current_minute) %}
-                        {% set cell_key = day ~ '-' ~ current_minute %}
-                        <td class="cell-border" style="height:1px;{% if quarter == 0 %}
-                                                            border-top-width: 2px;
-                                                            border-top-color: #555;
-                                                        {% endif %}">
-                        <div class="event-content">
-                            {% for e in minute_events %}
-                                <div class="event-slot"
-                                    style="background-color: {% if e.get('is_placeholder') %}transparent{% else %}{{ e.event.color or '#fff' }}{% endif %};
-                                           flex: 1;
-                                           display: flex;
-                                           flex-direction: column;
-                                           justify-content: center;
-                                           align-items: center;
-                                           padding: 2px;
-                                           min-height: 15px; height: 100%;">
-                                    {% if not e.get('is_placeholder') and e.is_start_time %}
-                                        <div class="event-title">{{ e.event.title }}</div>
-                                        <div class="event-time">{{ e.event.start_time }} – {{ e.event.end_time }}</div>
-                                        {% if e.event.id %}
-                                            <div class="event-buttons mt-1">
-                                                <button class="btn btn-sm btn-light btn-outline-secondary edit-button"
-        data-bs-toggle="modal"
-        data-bs-target="#eventModal"
-        data-id="{{ e.event.id }}"
-        data-title="{{ e.event.title }}"
-        data-date="{{ e.event.date }}"
-        data-start_time="{{ e.event.start_time }}"
-        data-end_time="{{ e.event.end_time }}"
-        data-image="{{ e.event.image }}"
-        data-color="{{ e.event.color }}">Bearbeiten</button>
-                                                <button class="btn btn-sm btn-light btn-outline-danger delete-button"
-        data-id="{{ e.event.id }}">Löschen</button>
-                                            </div>
-                                        {% endif %}
-                                    {% endif %}
+    <table class="table table-borderless schedule-table" style="table-layout: fixed; width: 100%; height: 100%;">
+        <thead>
+            <tr>
+                <th style="width:60px;"></th>
+                {% for day in display_days %}
+                    <th style="text-align:center; width: auto;" class="cell-border day-header">{{ day }}</th>
+                    <th style="width:60px;"></th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for hour in range(8, 18) %}
+                {% for quarter in range(0, 60, 15) %}
+                    {% set current_minute = hour * 60 + quarter %}
+                    <tr style="height:calc((100vh - 120px) / 40);">
+                        {% if quarter == 0 or quarter == 30 %}
+                        <td class="time-td time-cell"><div class="time-div">{{ "%02d:%02d"|format(hour, quarter) }}</div></td>
+                        {% else %}
+                        <td class="time-td time-cell"></td>
+                        {% endif %}
+                        {% for day_label in display_days %}
+                            {% set day = day_key_map[day_label] %}
+                            {% set minute_events = find_events(events[day], current_minute) %}
+                            <td class="cell-border{% if is_current_day(day) %} current-day{% endif %}" style="height:1px;{% if quarter == 0 %}
+                                                                border-top-width: 2px;
+                                                                border-top-color: #555;
+                                                            {% endif %}">
+                                <div class="event-content">
+                                    {% for e in minute_events %}
+                                        <div class="event-slot"
+                                            style="background-color: {% if e.get('is_placeholder') %}transparent{% else %}{{ e.event.color or '#fff' }}{% endif %};
+                                                   flex: 1;
+                                                   display: flex;
+                                                   flex-direction: column;
+                                                   justify-content: center;
+                                                   align-items: center;
+                                                   padding: 2px;
+                                                   min-height: 15px; height: 100%;">
+                                            {% if not e.get('is_placeholder') and e.is_start_time %}
+                                                <div class="event-title">{{ e.event.title }}</div>
+                                                {% if e.event.id %}
+                                                    <div class="event-buttons mt-1">
+                                                        <button class="btn btn-sm btn-light btn-outline-secondary edit-button"
+                data-bs-toggle="modal"
+                data-bs-target="#eventModal"
+                data-id="{{ e.event.id }}"
+                data-title="{{ e.event.title }}"
+                data-date="{{ e.event.date }}"
+                data-start_time="{{ e.event.start_time }}"
+                data-end_time="{{ e.event.end_time }}"
+                data-image="{{ e.event.image }}"
+                data-color="{{ e.event.color }}">Bearbeiten</button>
+                                                        <button class="btn btn-sm btn-light btn-outline-danger delete-button"
+                data-id="{{ e.event.id }}">Löschen</button>
+                                                    </div>
+                                                {% endif %}
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
                                 </div>
-                            {% endfor %}
-                        </div>
-                    </td>
-                    {% endfor %}
-                </tr>
+                            </td>
+                            {% if quarter == 0 or quarter == 30 %}
+                            <td class="time-td time-cell"><div class="time-div">{{ "%02d:%02d"|format(hour, quarter) }}</div></td>
+                            {% else %}
+                            <td class="time-td time-cell"></td>
+                            {% endif %}
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
             {% endfor %}
-        {% endfor %}
-    </tbody>
-    <tfoot>
-    <tr>
-        <td class="time-td"><div class="time-div">18:00</div></td>
-        {% for day_label in display_days %}
-            <td  style="border-top-width: 2px; border-top-color: #555;"></td>
-        {% endfor %}
-    </tr>
-</tfoot>
-</table>
+        </tbody>
+        <tfoot>
+            <tr>
+                <td class="time-td time-cell"><div class="time-div">18:00</div></td>
+                {% for day_label in display_days %}
+                    <td style="border-top-width: 2px; border-top-color: #555;"></td>
+                    <td class="time-td time-cell"><div class="time-div">18:00</div></td>
+                {% endfor %}
+            </tr>
+        </tfoot>
+    </table>
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
             <button id="toggle-options" class="btn btn-secondary btn-sm">Optionen</button>
@@ -246,6 +273,76 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Update current time every minute
+        function updateCurrentTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('de-DE', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            const currentTimeElement = document.querySelector('.current-time');
+            if (currentTimeElement) {
+                currentTimeElement.textContent = timeString;
+            }
+            
+            // Update time slot highlighting
+            updateTimeSlotHighlighting(now);
+        }
+
+        function updateTimeSlotHighlighting(now) {
+            const currentHour = now.getHours();
+            const currentMinute = now.getMinutes();
+            const currentDay = now.toLocaleDateString('en-US', { weekday: 'long' });
+            
+            // Calculate current time slot (15-minute intervals starting from 8:00)
+            const currentTimeSlot = Math.floor((currentHour * 60 + currentMinute - 480) / 15); // 480 = 8:00 AM in minutes
+            
+            // Remove existing time slot classes
+            document.querySelectorAll('.current-time-slot, .past-time-slot').forEach(cell => {
+                cell.classList.remove('current-time-slot', 'past-time-slot');
+            });
+            
+            // Remove existing past event classes
+            document.querySelectorAll('.past-event').forEach(event => {
+                event.classList.remove('past-event');
+            });
+            
+            // Only highlight if we're within business hours (8:00-18:00)
+            if (currentHour >= 8 && currentHour < 18) {
+                // Find all table rows and highlight appropriate time slots for current day
+                const tableRows = document.querySelectorAll('tbody tr');
+                
+                tableRows.forEach((row, rowIndex) => {
+                    // Find cells for the current day
+                    const currentDayCells = row.querySelectorAll('.current-day');
+                    
+                    currentDayCells.forEach(cell => {
+                        if (rowIndex === currentTimeSlot) {
+                            // This is the current time slot
+                            cell.classList.add('current-time-slot');
+                        } else if (rowIndex < currentTimeSlot) {
+                            // This is a past time slot
+                            cell.classList.add('past-time-slot');
+                            
+                            // Also grey out any events in this past time slot
+                            const eventSlots = cell.querySelectorAll('.event-slot');
+                            eventSlots.forEach(eventSlot => {
+                                if (eventSlot.style.backgroundColor !== 'transparent' && 
+                                    !eventSlot.style.backgroundColor.includes('rgba(0,0,0,0)') &&
+                                    eventSlot.style.backgroundColor !== '') {
+                                    eventSlot.classList.add('past-event');
+                                }
+                            });
+                        }
+                    });
+                });
+            }
+        }
+
+        // Update time immediately and then every minute
+        updateCurrentTime();
+        setInterval(updateCurrentTime, 15000); // Update every 15 seconds for more accurate time slot highlighting
+
         document.getElementById('toggle-options').addEventListener('click', () => {
             document.querySelectorAll('.event-buttons').forEach(ev => {
                 ev.classList.toggle('show-buttons');

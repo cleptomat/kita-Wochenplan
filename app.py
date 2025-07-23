@@ -211,13 +211,17 @@ def index():
     day_key_map = {}
     for i, display_day in enumerate(display_days):
         day_key_map[display_day] = day_keys[i]
+    # Get current time for display
+    current_time = datetime.now().strftime('%H:%M')
+    
     return render_template(
         'index.html',
         events=events_by_day,
         days=DAYS,
         display_days=display_days,
         display_dates=display_dates,
-        day_key_map=day_key_map
+        day_key_map=day_key_map,
+        current_time=current_time
     )
 
 def find_events(events, minute):
@@ -328,6 +332,11 @@ def hhmm_to_minutes(hhmm):
     h, m = map(int, hhmm.split(":"))
     return h * 60 + m
 
-app.jinja_env.globals.update(find_events=find_events)
+def is_current_day(day_name):
+    """Check if the given day name is today"""
+    today = datetime.today().strftime('%A')  # Get current day name in English
+    return day_name == today
+
+app.jinja_env.globals.update(find_events=find_events, is_current_day=is_current_day)
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)
