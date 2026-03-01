@@ -1,9 +1,23 @@
 CREATE TABLE events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
-    date TEXT NOT NULL, -- Format: YYYYMMDD
-    start_time TEXT NOT NULL, -- Format: Minutes since 00:00
-    end_time TEXT NOT NULL,   -- Format: Minutes since 00:00
+    date TEXT NOT NULL,       -- Format: YYYYMMDD
+    start_time INTEGER NOT NULL, -- Minutes since 00:00
+    end_time INTEGER NOT NULL,   -- Minutes since 00:00
     image TEXT,
     color TEXT
+);
+
+CREATE TABLE day_notes (
+    date TEXT PRIMARY KEY,    -- Format: YYYYMMDD
+    note TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE week_meals (
+    date TEXT PRIMARY KEY,    -- Format: YYYYMMDD (one row per weekday)
+    meal TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE turnen_removed (
+    week_monday TEXT PRIMARY KEY  -- Format: YYYYMMDD (Monday of the affected week)
 );

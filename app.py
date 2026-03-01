@@ -1,13 +1,30 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 import sqlite3
 from datetime import datetime, timedelta
-import os
+import rtc
 
 app = Flask(__name__)
 DB_PATH = 'database.db'
 
+DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+DISPLAY_DAYS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag']
+EN_TO_DE = {
+    'Monday': 'Montag', 'Tuesday': 'Dienstag', 'Wednesday': 'Mittwoch',
+    'Thursday': 'Donnerstag', 'Friday': 'Freitag', 'Saturday': 'Samstag', 'Sunday': 'Sonntag'
+}
+
+STANDARD_EVENTS = [
+    ("Frühstück", "08:00", "09:30", "#B3E5FC"),
+    ("Morgentreff", "09:30", "10:00", "#EFA59F"),
+    ("Mittagessen", "12:00", "13:30", "#B3E5FC"),
+]
+TURNEN_EVENT = ("Turnen", "08:30", "10:00", "#C8E6C9")
+
+START_HOUR = 8
+END_HOUR = 15
+SLOT_COUNT = (END_HOUR - START_HOUR) * 4  # 15-min slots
+
 def init_db():
-    """Initialize database with events table if it doesn't exist"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
@@ -21,19 +38,27 @@ def init_db():
             color TEXT
         )
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS day_notes (
+            date TEXT PRIMARY KEY,
+            note TEXT NOT NULL DEFAULT ''
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS week_meals (
+            date TEXT PRIMARY KEY,
+            meal TEXT NOT NULL DEFAULT ''
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS turnen_removed (
+            week_monday TEXT PRIMARY KEY
+        )
+    """)
     conn.commit()
     conn.close()
 
-# Initialize database on startup
 init_db()
-
-DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-DISPLAY_DAYS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag']
-STANDARD_EVENTS = [
-    ("Frühstück", "08:00", "09:30", "#B3E5FC"),
-    ("Morgentreff", "09:30", "10:00", "#EFA59F"),
-    ("Mittagessen", "12:00", "13:30", "#B3E5FC"),
-]
 
 def hhmm_to_minutes(hhmm):
     h, m = map(int, hhmm.split(':'))
@@ -43,14 +68,15 @@ def minutes_to_hhmm(minutes):
     minutes = int(minutes)
     return f"{minutes // 60:02}:{minutes % 60:02}"
 
-def get_current_week_dates():
-    today = datetime.today()
-    monday = today - timedelta(days=today.weekday())
-    return [monday + timedelta(days=i) for i in range(7)]  # Mon to Sun
+def get_week_dates(week_offset=0):
+    today = rtc.today()
+    monday = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
+    return [monday + timedelta(days=i) for i in range(7)]
 
-def get_events_by_day():
-    week_dates = get_current_week_dates()
+def get_events_by_day(week_offset=0):
+    week_dates = get_week_dates(week_offset)
     date_strings = [d.strftime('%Y%m%d') for d in week_dates]
+    week_monday = week_dates[0].strftime('%Y%m%d')
 
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -61,11 +87,21 @@ def get_events_by_day():
         WHERE date IN ({placeholders})
     """, date_strings)
     rows = cursor.fetchall()
+
+    cursor.execute("SELECT date, meal FROM week_meals WHERE date IN ({})".format(placeholders), date_strings)
+    meals_rows = cursor.fetchall()
+    meals_by_date = {row[0]: row[1] for row in meals_rows}
+
+    cursor.execute("SELECT date, note FROM day_notes WHERE date IN ({})".format(placeholders), date_strings)
+    notes_rows = cursor.fetchall()
+    notes_by_date = {row[0]: row[1] for row in notes_rows}
+
+    cursor.execute("SELECT 1 FROM turnen_removed WHERE week_monday=?", (week_monday,))
+    turnen_removed = cursor.fetchone() is not None
+
     conn.close()
 
     events_by_day = {day: [] for day in DAYS}
-
-    # Map date string -> day name
     date_to_day = {d.strftime('%Y%m%d'): d.strftime('%A') for d in week_dates}
 
     for row in rows:
@@ -73,10 +109,10 @@ def get_events_by_day():
         if date_key not in date_to_day:
             continue
         weekday = date_to_day[date_key]
-
         event = {
             'id': row[0],
             'title': row[1],
+            'subtitle': '',
             'date': datetime.strptime(row[2], '%Y%m%d').strftime('%Y-%m-%d'),
             'start_time': minutes_to_hhmm(row[3]),
             'end_time': minutes_to_hhmm(row[4]),
@@ -85,13 +121,18 @@ def get_events_by_day():
         }
         events_by_day[weekday].append(event)
 
-    # Add standard events to each day
     for i, weekday in enumerate(DAYS[:5]):
         date_obj = week_dates[i]
+        date_key = date_obj.strftime('%Y%m%d')
+
         for title, start, end, color in STANDARD_EVENTS:
+            meal_text = ''
+            if title == 'Mittagessen':
+                meal_text = meals_by_date.get(date_key, '')
             events_by_day[weekday].append({
                 'id': None,
                 'title': title,
+                'subtitle': meal_text if title == 'Mittagessen' else '',
                 'date': date_obj.strftime('%Y-%m-%d'),
                 'start_time': start,
                 'end_time': end,
@@ -99,52 +140,32 @@ def get_events_by_day():
                 'color': color
             })
 
-    # Sort each day's events by start time
+        if weekday == 'Tuesday' and not turnen_removed:
+            events_by_day[weekday].append({
+                'id': None,
+                'title': TURNEN_EVENT[0],
+                'subtitle': '',
+                'date': date_obj.strftime('%Y-%m-%d'),
+                'start_time': TURNEN_EVENT[1],
+                'end_time': TURNEN_EVENT[2],
+                'image': None,
+                'color': TURNEN_EVENT[3]
+            })
+
     for day in events_by_day:
         events_by_day[day].sort(key=lambda e: hhmm_to_minutes(e['start_time']))
-    
 
-    return events_by_day
+    return events_by_day, meals_by_date, notes_by_date, turnen_removed, week_dates
 
-def assign_event_layout(events):
-    """
-    Given a list of events for one day, assign each event:
-    - col_index: its horizontal position in overlapping group
-    - total_cols: total number of overlapping columns (group width)
-    """
-    # Convert times to numeric minutes
-    for e in events:
-        e['_start'] = hhmm_to_minutes(e['start_time'])
-        e['_end'] = hhmm_to_minutes(e['end_time'])
-
-    events.sort(key=lambda e: e['_start'])
-
-    active = []
-    for e in events:
-        # Remove ended events from active
-        active = [a for a in active if a['_end'] > e['_start']]
-
-        # Find available column index
-        used_cols = [a['col_index'] for a in active if 'col_index' in a]
-        col = 0
-        while col in used_cols:
-            col += 1
-
-        # Assign column index and update
-        e['col_index'] = col
-        active.append(e)
-
-        # Store how many overlaps exist at this point
-        max_col = max(a['col_index'] for a in active)
-        for a in active:
-            a['total_cols'] = max(a.get('total_cols', 1), max_col + 1)
-
-    return events
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
+    week_offset = int(request.args.get('week', 0))
+    if week_offset not in (0, 1):
+        week_offset = 0
+
     if request.method == 'POST':
-        event_id = request.form.get('id')  # may be empty for new events
+        event_id = request.form.get('id')
         title = request.form['title']
         date_str = request.form['date']
         start_time = request.form['start_time']
@@ -158,62 +179,68 @@ def index():
 
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-
         if event_id:
-            # Update existing event
             cursor.execute("""
-                UPDATE events
-                SET title=?, date=?, start_time=?, end_time=?, image=?, color=?
+                UPDATE events SET title=?, date=?, start_time=?, end_time=?, image=?, color=?
                 WHERE id=?
             """, (title, date_db, start_minutes, end_minutes, image, color, event_id))
         else:
-            # Insert new event
             cursor.execute("""
                 INSERT INTO events (title, date, start_time, end_time, image, color)
                 VALUES (?, ?, ?, ?, ?, ?)
             """, (title, date_db, start_minutes, end_minutes, image, color))
-
         conn.commit()
         conn.close()
-        return redirect(url_for('index'))
+        return redirect(url_for('index', week=week_offset))
 
-    events_by_day = get_events_by_day()
-    week_dates = get_current_week_dates()
-    EN_TO_DE = {
-    'Monday': 'Montag',
-    'Tuesday': 'Dienstag',
-    'Wednesday': 'Mittwoch',
-    'Thursday': 'Donnerstag',
-    'Friday': 'Freitag',
-    'Saturday': 'Samstag',
-    'Sunday': 'Sonntag'
-    }
+    events_by_day, meals_by_date, notes_by_date, turnen_removed, week_dates = get_events_by_day(week_offset)
 
-    # Create display information
     display_days = []
     display_dates = []
     day_keys = []
-    
-    # Create display days with dates for weekdays
+
     for i, day in enumerate(DAYS[:5]):
         display_days.append(f"{EN_TO_DE[day]}\n{week_dates[i].strftime('%d.%m.%Y')}")
         display_dates.append(week_dates[i].strftime('%d.%m.%Y'))
-        day_keys.append(day)  # Keep original English day name for lookup
+        day_keys.append(day)
 
-    # Add weekend if there are Sunday events
-    if events_by_day['Sunday']:
+    if events_by_day['Saturday'] or events_by_day['Sunday']:
         display_days.append(f"{EN_TO_DE['Saturday']}\n{week_dates[5].strftime('%d.%m.%Y')}")
+        display_dates.append(week_dates[5].strftime('%d.%m.%Y'))
+        day_keys.append('Saturday')
+    if events_by_day['Sunday']:
         display_days.append(f"{EN_TO_DE['Sunday']}\n{week_dates[6].strftime('%d.%m.%Y')}")
-        display_dates.extend([week_dates[5].strftime('%d.%m.%Y'), week_dates[6].strftime('%d.%m.%Y')])
-        day_keys.extend(['Saturday', 'Sunday'])
+        display_dates.append(week_dates[6].strftime('%d.%m.%Y'))
+        day_keys.append('Sunday')
 
-    # Create mapping from display labels back to English day names
-    day_key_map = {}
-    for i, display_day in enumerate(display_days):
-        day_key_map[display_day] = day_keys[i]
-    # Get current time for display (demo: set to 13:35)
-    current_time = "13:35"  # datetime.now().strftime('%H:%M')
-    
+    day_key_map = {display_days[i]: day_keys[i] for i in range(len(display_days))}
+
+    # Map display_day label -> date string (YYYYMMDD) for notes/meals lookup
+    day_date_map = {}
+    for i, day_label in enumerate(display_days):
+        day_name = day_key_map[day_label]
+        idx = DAYS.index(day_name)
+        day_date_map[day_label] = week_dates[idx].strftime('%Y%m%d')
+
+    # Build ordered meals list (Mon–Fri) for the meal modal
+    meals_list = []
+    for i in range(5):
+        date_key = week_dates[i].strftime('%Y%m%d')
+        meals_list.append({
+            'date': date_key,
+            'day': EN_TO_DE[DAYS[i]],
+            'meal': meals_by_date.get(date_key, '')
+        })
+
+    # Allowed date range for event modal (current week Mon – next week Sun)
+    today = rtc.today()
+    cur_monday = today - timedelta(days=today.weekday())
+    min_date = cur_monday.strftime('%Y-%m-%d')
+    max_date = (cur_monday + timedelta(days=13)).strftime('%Y-%m-%d')
+
+    current_time = rtc.now().strftime('%H:%M')
+    week_monday_key = week_dates[0].strftime('%Y%m%d')
+
     return render_template(
         'index.html',
         events=events_by_day,
@@ -221,86 +248,84 @@ def index():
         display_days=display_days,
         display_dates=display_dates,
         day_key_map=day_key_map,
-        current_time=current_time
+        day_date_map=day_date_map,
+        notes_by_date=notes_by_date,
+        meals_list=meals_list,
+        turnen_removed=turnen_removed,
+        week_monday_key=week_monday_key,
+        week_offset=week_offset,
+        min_date=min_date,
+        max_date=max_date,
+        current_time=current_time,
+        start_hour=START_HOUR,
+        end_hour=END_HOUR,
+        slot_count=SLOT_COUNT,
     )
 
 def find_events(events, minute):
-    def overlaps(e1_start, e1_end, e2_start, e2_end):
-        return e1_start < e2_end and e2_start < e1_end
-
-    # Step 1: Create a mapping of events to their consistent column positions
-    # First, get all events that might overlap throughout the day
     all_events = []
     for event in events:
-        start = max(480, hhmm_to_minutes(event['start_time']))  # 8:00 AM minimum
-        end = hhmm_to_minutes(event['end_time'])
-        all_events.append({
-            'event': event,
-            'start': start,
-            'end': end
-        })
-    
-    # Sort by start time, then by duration (longer events first)
+        start = max(START_HOUR * 60, hhmm_to_minutes(event['start_time']))
+        end = min(END_HOUR * 60, hhmm_to_minutes(event['end_time']))
+        if end <= start:
+            continue
+        all_events.append({'event': event, 'start': start, 'end': end})
+
     all_events.sort(key=lambda x: (x['start'], x['start'] - x['end']))
-    
-    # Assign consistent column positions
+
     event_columns = {}
     columns_in_use = []
-    
+
     for evt in all_events:
-        # Remove events that have ended from active columns
         columns_in_use = [col for col in columns_in_use if col['end'] > evt['start']]
-        
-        # Find the first available column
         used_column_nums = [col['column'] for col in columns_in_use]
         column_num = 0
         while column_num in used_column_nums:
             column_num += 1
-        
-        # Assign this event to the column
         event_columns[evt['event']['title'] + str(evt['start'])] = column_num
-        columns_in_use.append({
-            'event_key': evt['event']['title'] + str(evt['start']),
-            'column': column_num,
-            'end': evt['end']
-        })
-    
-    # Calculate maximum concurrent events for the day
-    max_concurrent = 0
-    for t in range(480, 18*60, 15):  # Check every 15 minutes from 8 AM to 6 PM
-        concurrent = 0
-        for evt in all_events:
-            if evt['start'] <= t < evt['end']:
-                concurrent += 1
-        max_concurrent = max(max_concurrent, concurrent)
+        columns_in_use.append({'event_key': evt['event']['title'] + str(evt['start']), 'column': column_num, 'end': evt['end']})
 
-    # Step 2: Find events active at the current minute
+    # For each event, compute the max concurrent count over its entire duration.
+    # If it ever shares a slot with another event, it gets that max width for ALL its slots.
+    event_max_concurrent = {}
+    for evt in all_events:
+        key = evt['event']['title'] + str(evt['start'])
+        peak = 0
+        for t in range(evt['start'], evt['end'], 15):
+            concurrent = sum(1 for other in all_events if other['start'] <= t < other['end'])
+            peak = max(peak, concurrent)
+        event_max_concurrent[key] = peak
+
     active_events = []
     for event in events:
-        start = max(480, hhmm_to_minutes(event['start_time']))
-        end = hhmm_to_minutes(event['end_time'])
-
+        start = max(START_HOUR * 60, hhmm_to_minutes(event['start_time']))
+        end = min(END_HOUR * 60, hhmm_to_minutes(event['end_time']))
+        if end <= start:
+            continue
         if start <= minute < end:
             event_key = event['title'] + str(start)
             column = event_columns.get(event_key, 0)
-            
+            max_concurrent = event_max_concurrent.get(event_key, 1)
+            offset = minute - start
+            subtitle_line = (offset // 15) - 1 if offset >= 15 else -1
             active_events.append({
                 'event': event,
                 'start': start,
                 'end': end,
-                'is_start_time': minute - start < 15,
+                'is_start_time': offset < 15,
+                'subtitle_line': subtitle_line,
                 'column': column,
                 'max_concurrent': max_concurrent
             })
 
-    # Sort by column position to maintain consistent ordering
     active_events.sort(key=lambda x: x['column'])
-    
-    # Fill in empty columns to maintain layout consistency
+
+    # Use the maximum of all active events' max_concurrent to decide how many
+    # columns to render for this slot (keeps widths consistent within a slot)
+    slot_columns = max((e['max_concurrent'] for e in active_events), default=0)
+
     result_events = []
-    used_columns = [evt['column'] for evt in active_events]
-    
-    for col in range(max_concurrent):
+    for col in range(slot_columns):
         found = False
         for evt in active_events:
             if evt['column'] == col:
@@ -308,35 +333,83 @@ def find_events(events, minute):
                 found = True
                 break
         if not found:
-            # Add placeholder for empty column
             result_events.append({
                 'event': {'title': '', 'color': 'transparent', 'start_time': '', 'end_time': '', 'id': None},
                 'is_start_time': False,
                 'column': col,
-                'max_concurrent': max_concurrent,
+                'max_concurrent': slot_columns,
                 'is_placeholder': True
             })
 
     return result_events
 
+
 @app.route('/delete/<int:event_id>', methods=['POST'])
 def delete_event(event_id):
+    week_offset = int(request.args.get('week', 0))
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("DELETE FROM events WHERE id = ?", (event_id,))
     conn.commit()
     conn.close()
-    return '', 204  # No Content response
+    return '', 204
 
-def hhmm_to_minutes(hhmm):
-    h, m = map(int, hhmm.split(":"))
-    return h * 60 + m
+
+@app.route('/save_meals', methods=['POST'])
+def save_meals():
+    data = request.get_json()
+    week_offset = int(data.get('week', 0))
+    meals = data.get('meals', {})
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    for date_key, meal_text in meals.items():
+        cursor.execute("""
+            INSERT INTO week_meals (date, meal) VALUES (?, ?)
+            ON CONFLICT(date) DO UPDATE SET meal=excluded.meal
+        """, (date_key, meal_text))
+    conn.commit()
+    conn.close()
+    return jsonify({'status': 'ok'})
+
+
+@app.route('/save_note', methods=['POST'])
+def save_note():
+    data = request.get_json()
+    date_key = data.get('date')
+    note = data.get('note', '')
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO day_notes (date, note) VALUES (?, ?)
+        ON CONFLICT(date) DO UPDATE SET note=excluded.note
+    """, (date_key, note))
+    conn.commit()
+    conn.close()
+    return jsonify({'status': 'ok'})
+
+
+@app.route('/toggle_turnen', methods=['POST'])
+def toggle_turnen():
+    data = request.get_json()
+    week_monday = data.get('week_monday')
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM turnen_removed WHERE week_monday=?", (week_monday,))
+    if cursor.fetchone():
+        cursor.execute("DELETE FROM turnen_removed WHERE week_monday=?", (week_monday,))
+        removed = False
+    else:
+        cursor.execute("INSERT OR IGNORE INTO turnen_removed (week_monday) VALUES (?)", (week_monday,))
+        removed = True
+    conn.commit()
+    conn.close()
+    return jsonify({'removed': removed})
+
 
 def is_current_day(day_name):
-    """Check if the given day name is today"""
-    today = datetime.today().strftime('%A')  # Get current day name in English
-    return day_name == today
+    return rtc.today().strftime('%A') == day_name
 
 app.jinja_env.globals.update(find_events=find_events, is_current_day=is_current_day)
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)

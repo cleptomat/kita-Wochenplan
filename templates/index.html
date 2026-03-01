@@ -11,8 +11,8 @@
             margin: 0;
             padding: 0;
             overflow: auto;
-            scrollbar-width: none; /* Firefox */
-            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;
+            -ms-overflow-style: none;
         }
         body {
             height: 100vh;
@@ -27,8 +27,8 @@
             height: 100%;
         }
         .schedule-table {
-            height: calc(100vh - 120px);
-            min-height: calc(100vh - 120px);
+            height: calc(100vh - 240px);
+            min-height: calc(100vh - 240px);
             width: 100%;
             margin-bottom: 0;
         }
@@ -48,9 +48,7 @@
             border-right: 1px solid rgba(255,255,255,0.2);
             height: 100%;
         }
-        .event-slot:last-child {
-            border-right: none;
-        }
+        .event-slot:last-child { border-right: none; }
         .event-content > div {
             box-sizing: border-box;
             display: flex;
@@ -60,27 +58,23 @@
             height: 100%;
         }
         .event-slot .event-title {
-            font-size: 1.1rem;
+            font-size: 1.0rem;
             font-weight: bold;
             text-align: center;
-        }
-        .event-slot .event-time {
-            font-size: 1rem;
-            text-align: center;
+            white-space: pre-line;
         }
         .cell-border {
-            border-style:solid;
+            border-style: solid;
             border-width: var(--bs-border-width);
             border-color: darkgray;
-            padding:0 !important;
-            margin:0;
+            padding: 0 !important;
+            margin: 0;
             height: 100%;
         }
         .current-time {
             font-size: 1.5rem;
             font-weight: bold;
             text-align: center;
-            margin: 10px 0;
             color: #333;
         }
         .time-cell {
@@ -107,157 +101,204 @@
             display: block !important;
             margin-top: 2px;
         }
-        .time-td {
-            position:relative;
-        }
+        .time-td { position: relative; }
         .time-div {
-            font-weight:bold;
-            position:absolute;
-            top:-0.8rem;
+            font-weight: bold;
+            position: absolute;
+            top: -0.8rem;
         }
-        .current-day {
-            background-color: #e7f3ff !important;
-        }
+        .current-day { background-color: #e7f3ff !important; }
         .current-time-slot {
-            border: 3px solid #ff8c00 !important; /* Thicker, more orange-gold border */
-            box-shadow: 0 0 8px rgba(255, 140, 0, 0.6) !important; /* Add glow effect */
+            border: 3px solid #ff8c00 !important;
+            box-shadow: 0 0 8px rgba(255,140,0,0.6) !important;
         }
-        .past-time-slot {
-            background-color: #d0d0d0 !important; /* Darker gray for past time slots */
-        }
+        .past-time-slot { background-color: #d0d0d0 !important; }
         .past-event {
             opacity: 0.4 !important;
             filter: grayscale(60%) !important;
             background-color: #b0b0b0 !important;
         }
+        .day-note-row td {
+            padding: 4px 2px 2px 2px !important;
+            border: none;
+        }
+        .day-note-textarea {
+            width: 100%;
+            font-size: 0.82rem;
+            resize: vertical;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 4px 6px;
+            background: #fffde7;
+        }
+        .week-nav {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .week-nav .week-label {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #555;
+        }
     </style>
 </head>
-<body class="p-4">
+<body class="p-3">
     <div class="main-content">
-    <div class="current-time">{{ current_time }}</div>
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <!--<h2>Wochenplan</h2> -->
-    </div>
-    <table class="table table-borderless schedule-table" style="table-layout: fixed; width: 100%; height: 100%;">
-        <thead>
-            <tr>
-                <th style="width:60px;"></th>
-                {% for day in display_days %}
-                    <th style="text-align:center; width: auto;" class="cell-border day-header">{{ day }}</th>
+
+        <!-- Top bar -->
+        <div class="d-flex align-items-center justify-content-between mb-2 px-1">
+            <div class="week-nav">
+                {% if week_offset == 1 %}
+                    <a href="{{ url_for('index', week=0) }}" class="btn btn-outline-secondary btn-sm">&#8592; Diese Woche</a>
+                    <span class="week-label">Nächste Woche</span>
+                {% else %}
+                    <span class="week-label">Diese Woche</span>
+                    <a href="{{ url_for('index', week=1) }}" class="btn btn-outline-secondary btn-sm">Nächste Woche &#8594;</a>
+                {% endif %}
+            </div>
+            <div class="current-time">{{ current_time }}</div>
+            <div class="d-flex align-items-center gap-2">
+                <!-- Extra buttons – hidden until Optionen is clicked -->
+                <div id="extra-buttons" class="d-flex gap-2" style="display:none !important;">
+                    <button id="btn-turnen" class="btn btn-sm {% if turnen_removed %}btn-outline-success{% else %}btn-outline-warning{% endif %}"
+                        data-week-monday="{{ week_monday_key }}">
+                        {% if turnen_removed %}Turnen wieder eintragen{% else %}Turnen entfernen{% endif %}
+                    </button>
+                    <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#mahlzeitenModal">&#127860; Mittagessen</button>
+                    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#eventModal">+ Event</button>
+                </div>
+                <button id="toggle-options" class="btn btn-secondary btn-sm">Optionen</button>
+            </div>
+        </div>
+
+        <!-- Schedule table -->
+        <table class="table table-borderless schedule-table" style="table-layout: fixed; width: 100%; height: 100%;">
+            <thead>
+                <tr>
                     <th style="width:60px;"></th>
-                {% endfor %}
-            </tr>
-        </thead>
-        <tbody>
-            {% for hour in range(8, 18) %}
-                {% for quarter in range(0, 60, 15) %}
-                    {% set current_minute = hour * 60 + quarter %}
-                    <tr style="height:calc((100vh - 120px) / 40);">
-                        {% if quarter == 0 or quarter == 30 %}
-                        <td class="time-td time-cell"><div class="time-div">{{ "%02d:%02d"|format(hour, quarter) }}</div></td>
-                        {% else %}
-                        <td class="time-td time-cell"></td>
-                        {% endif %}
-                        {% for day_label in display_days %}
-                            {% set day = day_key_map[day_label] %}
-                            {% set minute_events = find_events(events[day], current_minute) %}
-                            <td class="cell-border{% if is_current_day(day) %} current-day{% endif %}" style="height:1px;{% if quarter == 0 %}
-                                                                border-top-width: 2px;
-                                                                border-top-color: #555;
-                                                            {% endif %}">
-                                <div class="event-content">
-                                    {% for e in minute_events %}
-                                        <div class="event-slot"
-                                            style="background-color: {% if e.get('is_placeholder') %}transparent{% else %}{{ e.event.color or '#fff' }}{% endif %};
-                                                   flex: 1;
-                                                   display: flex;
-                                                   flex-direction: column;
-                                                   justify-content: center;
-                                                   align-items: center;
-                                                   padding: 2px;
-                                                   min-height: 15px; height: 100%;">
-                                            {% if not e.get('is_placeholder') and e.is_start_time %}
-                                                <div class="event-title">{{ e.event.title }}</div>
-                                                {% if e.event.id %}
-                                                    <div class="event-buttons mt-1">
-                                                        <button class="btn btn-sm btn-light btn-outline-secondary edit-button"
-                data-bs-toggle="modal"
-                data-bs-target="#eventModal"
-                data-id="{{ e.event.id }}"
-                data-title="{{ e.event.title }}"
-                data-date="{{ e.event.date }}"
-                data-start_time="{{ e.event.start_time }}"
-                data-end_time="{{ e.event.end_time }}"
-                data-image="{{ e.event.image }}"
-                data-color="{{ e.event.color }}">Bearbeiten</button>
-                                                        <button class="btn btn-sm btn-light btn-outline-danger delete-button"
-                data-id="{{ e.event.id }}">Löschen</button>
-                                                    </div>
-                                                {% endif %}
-                                            {% endif %}
-                                        </div>
-                                    {% endfor %}
-                                </div>
-                            </td>
+                    {% for day in display_days %}
+                        <th style="text-align:center; width:auto;" class="cell-border day-header">{{ day }}</th>
+                        {% if not loop.last %}<th style="width:60px;"></th>{% endif %}
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for hour in range(start_hour, end_hour) %}
+                    {% for quarter in range(0, 60, 15) %}
+                        {% set current_minute = hour * 60 + quarter %}
+                        <tr style="height:calc((100vh - 240px) / {{ slot_count }});">
                             {% if quarter == 0 or quarter == 30 %}
                             <td class="time-td time-cell"><div class="time-div">{{ "%02d:%02d"|format(hour, quarter) }}</div></td>
                             {% else %}
                             <td class="time-td time-cell"></td>
                             {% endif %}
-                        {% endfor %}
-                    </tr>
+                            {% for day_label in display_days %}
+                                {% set day = day_key_map[day_label] %}
+                                {% set minute_events = find_events(events[day], current_minute) %}
+                                <td class="cell-border{% if is_current_day(day) %} current-day{% endif %}"
+                                    style="height:1px;{% if quarter == 0 %}border-top-width:2px;border-top-color:#555;{% endif %}">
+                                    <div class="event-content">
+                                        {% for e in minute_events %}
+                                            <div class="event-slot"
+                                                style="background-color:{% if e.get('is_placeholder') %}transparent{% else %}{{ e.event.color or '#fff' }}{% endif %};
+                                                       flex:1;display:flex;flex-direction:column;justify-content:center;
+                                                       align-items:center;padding:2px;min-height:15px;height:100%;">
+                                                {% if not e.get('is_placeholder') and e.is_start_time %}
+                                                    <div class="event-title">{{ e.event.title }}</div>
+                                                    {% if e.event.id %}
+                                                        <div class="event-buttons mt-1">
+                                                            <button class="btn btn-sm btn-light btn-outline-secondary edit-button"
+                                                                data-bs-toggle="modal" data-bs-target="#eventModal"
+                                                                data-id="{{ e.event.id }}"
+                                                                data-title="{{ e.event.title }}"
+                                                                data-date="{{ e.event.date }}"
+                                                                data-start_time="{{ e.event.start_time }}"
+                                                                data-end_time="{{ e.event.end_time }}"
+                                                                data-image="{{ e.event.image }}"
+                                                                data-color="{{ e.event.color }}">Bearbeiten</button>
+                                                            <button class="btn btn-sm btn-light btn-outline-danger delete-button"
+                                                                data-id="{{ e.event.id }}">Löschen</button>
+                                                        </div>
+                                                    {% endif %}
+                                                {% elif not e.get('is_placeholder') and e.subtitle_line >= 0 and e.event.subtitle %}
+                                                    {% set lines = e.event.subtitle.split('\n') %}
+                                                    {% if e.subtitle_line < lines|length %}
+                                                        <div class="event-title" style="text-align:left;width:100%;padding-left:4px;">{{ lines[e.subtitle_line] }}</div>
+                                                    {% endif %}
+                                                {% endif %}
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                </td>
+                                {% if not loop.last %}
+                                {% if quarter == 0 or quarter == 30 %}
+                                <td class="time-td time-cell"><div class="time-div">{{ "%02d:%02d"|format(hour, quarter) }}</div></td>
+                                {% else %}
+                                <td class="time-td time-cell"></td>
+                                {% endif %}
+                                {% endif %}
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
                 {% endfor %}
-            {% endfor %}
-        </tbody>
-        <tfoot>
-            <tr>
-                <td class="time-td time-cell"><div class="time-div">18:00</div></td>
-                {% for day_label in display_days %}
-                    <td style="border-top-width: 2px; border-top-color: #555;"></td>
-                    <td class="time-td time-cell"><div class="time-div">18:00</div></td>
-                {% endfor %}
-            </tr>
-        </tfoot>
-    </table>
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <div>
-            <button id="toggle-options" class="btn btn-secondary btn-sm">Optionen</button>
-            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#eventModal">+ Event</button>
-        </div>
-    </div>
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td class="time-td time-cell"><div class="time-div">{{ "%02d:00"|format(end_hour) }}</div></td>
+                    {% for day_label in display_days %}
+                        <td style="border-top-width:2px;border-top-color:#555;"></td>
+                        {% if not loop.last %}<td class="time-td time-cell"><div class="time-div">{{ "%02d:00"|format(end_hour) }}</div></td>{% endif %}
+                    {% endfor %}
+                </tr>
+                <tr class="day-note-row">
+                    <td></td>
+                    {% for day_label in display_days %}
+                        {% set date_key = day_date_map[day_label] %}
+                        <td colspan="1">
+                            <textarea class="day-note-textarea" rows="4"
+                                data-date="{{ date_key }}"
+                                placeholder="Notizen für diesen Tag …">{{ notes_by_date.get(date_key, '') }}</textarea>
+                        </td>
+                        {% if not loop.last %}<td></td>{% endif %}
+                    {% endfor %}
+                </tr>
+            </tfoot>
+        </table>
+
     </div>
 
-    <!-- Modal für Event hinzufügen -->
+    <!-- Event Modal -->
     <div class="modal fade" id="eventModal" tabindex="-1" aria-labelledby="eventModalLabel" aria-hidden="true">
         <div class="modal-dialog">
-            <form method="POST" class="modal-content">
+            <form method="POST" action="{{ url_for('index', week=week_offset) }}" class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="eventModalLabel">Neues Event</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-2">
-                        <label for="title" class="form-label">Titel</label>
+                        <label class="form-label">Titel</label>
                         <input type="text" class="form-control" name="title" required>
                     </div>
                     <div class="mb-2">
-                        <label for="date" class="form-label">Datum</label>
-                        <input type="date" class="form-control" name="date" required>
+                        <label class="form-label">Datum</label>
+                        <input type="date" class="form-control" name="date" required
+                            min="{{ min_date }}" max="{{ max_date }}">
                     </div>
                     <div class="mb-2">
-                        <label for="start_time" class="form-label">Startzeit</label>
+                        <label class="form-label">Startzeit</label>
                         <input type="time" class="form-control" name="start_time" required>
                     </div>
                     <div class="mb-2">
-                        <label for="end_time" class="form-label">Endzeit</label>
+                        <label class="form-label">Endzeit</label>
                         <input type="time" class="form-control" name="end_time" required>
                     </div>
                     <div class="mb-2">
-                        <label for="color" class="form-label">Farbe</label>
-                        <input type="color" class="form-control form-control-color" name="color">
+                        <label class="form-label">Farbe</label>
+                        <input type="color" class="form-control form-control-color" name="color" value="#4A90D9">
                     </div>
                     <div style="display:none;" class="mb-2">
-                        <label for="image" class="form-label">Bild-URL (optional)</label>
                         <input type="text" class="form-control" name="image">
                     </div>
                     <input type="hidden" name="id" id="event-id">
@@ -270,65 +311,72 @@
         </div>
     </div>
 
+    <!-- Mittagessen Modal -->
+    <div class="modal fade" id="mahlzeitenModal" tabindex="-1" aria-labelledby="mahlzeitenModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="mahlzeitenModalLabel">&#127860; Mittagessen für die Woche</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+                </div>
+                <div class="modal-body">
+                    {% for item in meals_list %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">{{ item.day }}</label>
+                        <textarea class="form-control meal-input" rows="5"
+                            maxlength="500"
+                            data-date="{{ item.date }}"
+                            placeholder="Zeile 1 → 12:15&#10;Zeile 2 → 12:30&#10;Zeile 3 → 12:45&#10;Zeile 4 → 13:00&#10;Zeile 5 → 13:15">{{ item.meal }}</textarea>
+                        <div class="form-text">Jede Zeile wird in einem eigenen 15-Min-Slot angezeigt (max. 5 Zeilen).</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" id="save-meals-btn" class="btn btn-success">Speichern</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="{{ url_for('static', filename='bootstrap-5.3.7-dist/js/bootstrap.bundle.min.js') }}"></script>
     <script>
-        // Update current time every minute
+        const START_HOUR = {{ start_hour }};
+        const END_HOUR = {{ end_hour }};
+        const SLOT_COUNT = {{ slot_count }};
+        const WEEK_OFFSET = {{ week_offset }};
+
+        // ── Uhrzeit & Hervorhebung ───────────────────────────────────────────
         function updateCurrentTime() {
-            // Demo: use fixed time instead of actual time
-            const demoTime = "13:35";
-            const currentTimeElement = document.querySelector('.current-time');
-            if (currentTimeElement) {
-                currentTimeElement.textContent = demoTime;
-            }
-            
-            // Update time slot highlighting with demo time
             const now = new Date();
-            now.setHours(13, 35, 0, 0); // Set to demo time 13:35
+            const h = String(now.getHours()).padStart(2, '0');
+            const m = String(now.getMinutes()).padStart(2, '0');
+            const el = document.querySelector('.current-time');
+            if (el) el.textContent = `${h}:${m}`;
             updateTimeSlotHighlighting(now);
         }
 
         function updateTimeSlotHighlighting(now) {
             const currentHour = now.getHours();
             const currentMinute = now.getMinutes();
-            const currentDay = now.toLocaleDateString('en-US', { weekday: 'long' });
-            
-            // Calculate current time slot (15-minute intervals starting from 8:00)
-            const currentTimeSlot = Math.floor((currentHour * 60 + currentMinute - 480) / 15); // 480 = 8:00 AM in minutes
-            
-            // Remove existing time slot classes
-            document.querySelectorAll('.current-time-slot, .past-time-slot').forEach(cell => {
-                cell.classList.remove('current-time-slot', 'past-time-slot');
+            const currentTimeSlot = Math.floor((currentHour * 60 + currentMinute - START_HOUR * 60) / 15);
+
+            document.querySelectorAll('.current-time-slot, .past-time-slot').forEach(c => {
+                c.classList.remove('current-time-slot', 'past-time-slot');
             });
-            
-            // Remove existing past event classes
-            document.querySelectorAll('.past-event').forEach(event => {
-                event.classList.remove('past-event');
-            });
-            
-            // Only highlight if we're within business hours (8:00-18:00)
-            if (currentHour >= 8 && currentHour < 18) {
-                // Find all table rows and highlight appropriate time slots for current day
-                const tableRows = document.querySelectorAll('tbody tr');
-                
-                tableRows.forEach((row, rowIndex) => {
-                    // Find cells for the current day
-                    const currentDayCells = row.querySelectorAll('.current-day');
-                    
-                    currentDayCells.forEach(cell => {
+            document.querySelectorAll('.past-event').forEach(e => e.classList.remove('past-event'));
+
+            if (currentHour >= START_HOUR && currentHour < END_HOUR) {
+                document.querySelectorAll('tbody tr').forEach((row, rowIndex) => {
+                    row.querySelectorAll('.current-day').forEach(cell => {
                         if (rowIndex === currentTimeSlot) {
-                            // This is the current time slot
                             cell.classList.add('current-time-slot');
                         } else if (rowIndex < currentTimeSlot) {
-                            // This is a past time slot
                             cell.classList.add('past-time-slot');
-                            
-                            // Also grey out any events in this past time slot
-                            const eventSlots = cell.querySelectorAll('.event-slot');
-                            eventSlots.forEach(eventSlot => {
-                                if (eventSlot.style.backgroundColor !== 'transparent' && 
-                                    !eventSlot.style.backgroundColor.includes('rgba(0,0,0,0)') &&
-                                    eventSlot.style.backgroundColor !== '') {
-                                    eventSlot.classList.add('past-event');
+                            cell.querySelectorAll('.event-slot').forEach(slot => {
+                                const bg = slot.style.backgroundColor;
+                                if (bg && bg !== 'transparent' && !bg.includes('rgba(0,0,0,0)')) {
+                                    slot.classList.add('past-event');
                                 }
                             });
                         }
@@ -337,51 +385,106 @@
             }
         }
 
-        // Update time immediately and then every minute
         updateCurrentTime();
-        setInterval(updateCurrentTime, 15000); // Update every 15 seconds for more accurate time slot highlighting
+        setInterval(updateCurrentTime, 15000);
 
-        document.getElementById('toggle-options').addEventListener('click', () => {
-            document.querySelectorAll('.event-buttons').forEach(ev => {
-                ev.classList.toggle('show-buttons');
-            });
+        // ── Optionen ─────────────────────────────────────────────────────────
+        const toggleBtn = document.getElementById('toggle-options');
+        const extraButtons = document.getElementById('extra-buttons');
+        let optionsVisible = false;
+
+        toggleBtn.addEventListener('click', () => {
+            optionsVisible = !optionsVisible;
+            extraButtons.style.setProperty('display', optionsVisible ? 'flex' : 'none', 'important');
+            toggleBtn.classList.toggle('btn-secondary', !optionsVisible);
+            toggleBtn.classList.toggle('btn-dark', optionsVisible);
+            document.querySelectorAll('.event-buttons').forEach(el => el.classList.toggle('show-buttons', optionsVisible));
         });
-        document.querySelectorAll('.edit-button').forEach(button => {
-            button.addEventListener('click', () => {
+
+        // ── Bearbeiten ───────────────────────────────────────────────────────
+        document.querySelectorAll('.edit-button').forEach(btn => {
+            btn.addEventListener('click', () => {
                 document.getElementById('eventModalLabel').innerText = 'Event bearbeiten';
-                document.querySelector('input[name=title]').value = button.dataset.title;
-                document.querySelector('input[name=date]').value = button.dataset.date;
-                document.querySelector('input[name=start_time]').value = button.dataset.start_time;
-                document.querySelector('input[name=end_time]').value = button.dataset.end_time;
-                document.querySelector('input[name=image]').value = button.dataset.image || '';
-                document.querySelector('input[name=color]').value = button.dataset.color || '#000000';
-                document.getElementById('event-id').value = button.dataset.id;
+                document.querySelector('input[name=title]').value = btn.dataset.title;
+                document.querySelector('input[name=date]').value = btn.dataset.date;
+                document.querySelector('input[name=start_time]').value = btn.dataset.start_time;
+                document.querySelector('input[name=end_time]').value = btn.dataset.end_time;
+                document.querySelector('input[name=image]').value = btn.dataset.image || '';
+                document.querySelector('input[name=color]').value = btn.dataset.color || '#4A90D9';
+                document.getElementById('event-id').value = btn.dataset.id;
             });
         });
 
-        // Reset form on modal close to create mode
         document.getElementById('eventModal').addEventListener('hidden.bs.modal', () => {
             document.getElementById('eventModalLabel').innerText = 'Neues Event';
-            document.querySelector('form').reset();
+            document.querySelector('#eventModal form').reset();
             document.getElementById('event-id').value = '';
         });
-document.querySelectorAll('.delete-button').forEach(button => {
-    button.addEventListener('click', () => {
-        const eventId = button.dataset.id;
-        if (confirm("Möchtest du dieses Event wirklich löschen?")) {
-            fetch(`/delete/${eventId}`, {
-                method: 'POST'
+
+        // ── Löschen ──────────────────────────────────────────────────────────
+        document.querySelectorAll('.delete-button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (!confirm('Möchtest du dieses Event wirklich löschen?')) return;
+                fetch(`/delete/${btn.dataset.id}?week=${WEEK_OFFSET}`, { method: 'POST' })
+                    .then(r => r.ok ? location.reload() : alert('Fehler beim Löschen des Events.'));
+            });
+        });
+
+        // ── Turnen ein-/austragen ────────────────────────────────────────────
+        document.getElementById('btn-turnen').addEventListener('click', function () {
+            fetch('/toggle_turnen', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ week_monday: this.dataset.weekMonday })
             })
-            .then(response => {
-                if (response.ok) {
-                    window.location.reload(); // Reload page to update view
-                } else {
-                    alert("Fehler beim Löschen des Events.");
+            .then(r => r.json())
+            .then(() => location.reload());
+        });
+
+        // ── Mittagessen: max 5 Zeilen ────────────────────────────────────────
+        document.querySelectorAll('.meal-input').forEach(ta => {
+            ta.addEventListener('keydown', e => {
+                if (e.key === 'Enter') {
+                    const lines = ta.value.split('\n');
+                    if (lines.length >= 5) e.preventDefault();
                 }
             });
-        }
-    });
-});
+            ta.addEventListener('input', () => {
+                const lines = ta.value.split('\n');
+                if (lines.length > 5) ta.value = lines.slice(0, 5).join('\n');
+            });
+        });
+
+        // ── Mittagessen speichern ────────────────────────────────────────────
+        document.getElementById('save-meals-btn').addEventListener('click', () => {
+            const meals = {};
+            document.querySelectorAll('.meal-input').forEach(ta => { meals[ta.dataset.date] = ta.value; });
+            fetch('/save_meals', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ meals, week: WEEK_OFFSET })
+            })
+            .then(r => r.json())
+            .then(() => {
+                bootstrap.Modal.getInstance(document.getElementById('mahlzeitenModal')).hide();
+                location.reload();
+            });
+        });
+
+        // ── Tagesnotizen (automatisch speichern) ─────────────────────────────
+        const noteTimers = {};
+        document.querySelectorAll('.day-note-textarea').forEach(ta => {
+            ta.addEventListener('input', () => {
+                clearTimeout(noteTimers[ta.dataset.date]);
+                noteTimers[ta.dataset.date] = setTimeout(() => {
+                    fetch('/save_note', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ date: ta.dataset.date, note: ta.value })
+                    });
+                }, 800);
+            });
+        });
     </script>
 </body>
 </html>
