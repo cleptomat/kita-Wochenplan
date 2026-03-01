@@ -119,7 +119,6 @@
             background-color: #e7f3ff !important;
         }
         .current-time-slot {
-            background-color: #ffd700 !important; /* Gold color for current time slot */
             border: 3px solid #ff8c00 !important; /* Thicker, more orange-gold border */
             box-shadow: 0 0 8px rgba(255, 140, 0, 0.6) !important; /* Add glow effect */
         }
@@ -275,17 +274,16 @@
     <script>
         // Update current time every minute
         function updateCurrentTime() {
-            const now = new Date();
-            const timeString = now.toLocaleTimeString('de-DE', {
-                hour: '2-digit',
-                minute: '2-digit'
-            });
+            // Demo: use fixed time instead of actual time
+            const demoTime = "13:35";
             const currentTimeElement = document.querySelector('.current-time');
             if (currentTimeElement) {
-                currentTimeElement.textContent = timeString;
+                currentTimeElement.textContent = demoTime;
             }
             
-            // Update time slot highlighting
+            // Update time slot highlighting with demo time
+            const now = new Date();
+            now.setHours(13, 35, 0, 0); // Set to demo time 13:35
             updateTimeSlotHighlighting(now);
         }
 

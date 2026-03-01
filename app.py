@@ -30,9 +30,9 @@ init_db()
 DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 DISPLAY_DAYS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag']
 STANDARD_EVENTS = [
-    ("Frühstück", "08:00", "09:30", "#f8d7da"),
-    ("Morgentreff", "09:30", "10:00", "#d1ecf1"),
-    ("Mittagessen", "12:00", "13:30", "#d4edda"),
+    ("Frühstück", "08:00", "09:30", "#B3E5FC"),
+    ("Morgentreff", "09:30", "10:00", "#EFA59F"),
+    ("Mittagessen", "12:00", "13:30", "#B3E5FC"),
 ]
 
 def hhmm_to_minutes(hhmm):
@@ -211,8 +211,8 @@ def index():
     day_key_map = {}
     for i, display_day in enumerate(display_days):
         day_key_map[display_day] = day_keys[i]
-    # Get current time for display
-    current_time = datetime.now().strftime('%H:%M')
+    # Get current time for display (demo: set to 13:35)
+    current_time = "13:35"  # datetime.now().strftime('%H:%M')
     
     return render_template(
         'index.html',
